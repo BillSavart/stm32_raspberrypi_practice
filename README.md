@@ -70,3 +70,33 @@ python3 serial_collector.py --port /dev/serial0 --baud 115200 --db data/room_rea
 ```
 
 Detailed Pi wiring and setup notes are in `raspberry_pi/README.md`.
+
+## Backend API
+
+The backend lives in `backend/`. It exposes:
+
+- `POST /api/readings`
+- `GET /api/readings/latest`
+- `GET /api/readings?hours=24`
+- `GET /health`
+
+Run locally:
+
+```bash
+cd backend
+python3 -m venv .venv
+. .venv/bin/activate
+python3 -m pip install -r requirements.txt
+uvicorn app:app --host 0.0.0.0 --port 8000
+```
+
+Then run the Pi collector with upload enabled:
+
+```bash
+cd raspberry_pi
+python3 serial_collector.py \
+  --port /dev/serial0 \
+  --baud 115200 \
+  --db data/room_readings.sqlite3 \
+  --upload-url http://SERVER_IP_OR_DOMAIN:8000/api/readings
+```

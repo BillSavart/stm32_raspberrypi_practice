@@ -7,6 +7,8 @@ import argparse
 import json
 import sqlite3
 import sys
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -111,6 +113,39 @@ def insert_reading(conn: sqlite3.Connection, reading: Reading) -> None:
     conn.commit()
 
 
+def reading_to_upload_payload(reading: Reading) -> dict[str, int | str]:
+    return {
+        "measured_at": reading.measured_at,
+        "temperature_c_x100": reading.temperature_c_x100,
+        "humidity_rh_x100": reading.humidity_rh_x100,
+        "pressure_pa": reading.pressure_pa,
+        "gas_ohm": reading.gas_ohm,
+        "gas_valid": reading.gas_valid,
+        "heat_stable": reading.heat_stable,
+    }
+
+
+def upload_reading(upload_url: str, reading: Reading, timeout: float, api_key: str | None) -> bool:
+    body = json.dumps(reading_to_upload_payload(reading)).encode("utf-8")
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["X-API-Key"] = api_key
+
+    request = urllib.request.Request(
+        upload_url,
+        data=body,
+        headers=headers,
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return 200 <= response.status < 300
+    except (TimeoutError, urllib.error.URLError, urllib.error.HTTPError) as exc:
+        print(f"upload failed: {exc}", file=sys.stderr, flush=True)
+        return False
+
+
 def iter_stdin_lines(stdin: TextIO) -> Iterable[str]:
     for line in stdin:
         yield line
@@ -154,6 +189,8 @@ def run(args: argparse.Namespace) -> int:
     print(f"Collecting STM32 readings into {args.db}", flush=True)
     if not args.stdin:
         print(f"Serial source: {args.port} @ {args.baud}", flush=True)
+    if args.upload_url:
+        print(f"Upload target: {args.upload_url}", flush=True)
 
     for line in source:
         reading = parse_reading(line)
@@ -163,6 +200,8 @@ def run(args: argparse.Namespace) -> int:
             continue
 
         insert_reading(conn, reading)
+        if args.upload_url:
+            upload_reading(args.upload_url, reading, args.upload_timeout, args.api_key)
         print_reading(reading)
 
     return 0
@@ -174,6 +213,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--baud", type=int, default=115200, help="UART baud rate.")
     parser.add_argument("--timeout", type=float, default=1.0, help="Serial read timeout in seconds.")
     parser.add_argument("--db", type=Path, default=Path("room_readings.sqlite3"), help="SQLite database path.")
+    parser.add_argument("--upload-url", help="Optional backend POST /api/readings URL.")
+    parser.add_argument("--upload-timeout", type=float, default=3.0, help="Backend upload timeout in seconds.")
+    parser.add_argument("--api-key", help="Optional backend API key sent as X-API-Key.")
     parser.add_argument("--stdin", action="store_true", help="Read JSON lines from stdin instead of a serial port.")
     parser.add_argument("--verbose", action="store_true", help="Print ignored non-reading lines to stderr.")
     return parser

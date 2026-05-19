@@ -58,6 +58,17 @@ similar to `/dev/ttyUSB0`:
 python3 serial_collector.py --port /dev/ttyUSB0 --baud 115200 --db data/room_readings.sqlite3
 ```
 
+To upload each reading to the backend while still keeping the local SQLite copy:
+
+```bash
+python3 serial_collector.py \
+  --port /dev/serial0 \
+  --baud 115200 \
+  --db data/room_readings.sqlite3 \
+  --upload-url http://SERVER_IP_OR_DOMAIN:8000/api/readings \
+  --api-key 'change-this-secret'
+```
+
 ## Development test without hardware
 
 ```bash
