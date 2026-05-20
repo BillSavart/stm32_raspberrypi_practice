@@ -98,6 +98,14 @@ python3 serial_collector.py \
   --port /dev/serial0 \
   --baud 115200 \
   --db data/room_readings.sqlite3 \
-  --upload-url http://SERVER_IP_OR_DOMAIN:8000/api/readings \
+  --upload-url https://SERVER_IP_OR_DOMAIN/api/readings \
   --upload-every-seconds 60
 ```
+
+For deployment, use separate write/read API keys:
+
+- `ROOM_MONITOR_WRITE_API_KEY`: Raspberry Pi uploads
+- `ROOM_MONITOR_READ_API_KEY`: queries and future LINE Bot
+
+Copy `.env.example` to `.env` for local development secrets. `.env` is ignored
+by git; do not commit real API keys.

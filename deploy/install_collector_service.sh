@@ -15,17 +15,25 @@ if [[ ! -d "${REPO_DIR}/raspberry_pi" ]]; then
 fi
 
 sudo mkdir -p "${ENV_DIR}"
+if ! id "${SERVICE_USER}" >/dev/null 2>&1; then
+  echo "Service user does not exist: ${SERVICE_USER}" >&2
+  echo "Set SERVICE_USER to an existing user if your Raspberry Pi account is not pi." >&2
+  exit 1
+fi
+
 if [[ ! -f "${ENV_FILE}" ]]; then
   sudo cp "${REPO_DIR}/deploy/env/collector.env.example" "${ENV_FILE}"
   sudo chmod 600 "${ENV_FILE}"
-  echo "Created ${ENV_FILE}. Edit SERIAL_PORT, UPLOAD_URL, and ROOM_MONITOR_API_KEY before starting long-term."
+  echo "Created ${ENV_FILE}. Edit SERIAL_PORT, UPLOAD_URL, and ROOM_MONITOR_WRITE_API_KEY before starting long-term."
 fi
 
 python3 -m venv "${REPO_DIR}/raspberry_pi/.venv"
 "${REPO_DIR}/raspberry_pi/.venv/bin/python" -m pip install --upgrade pip
 "${REPO_DIR}/raspberry_pi/.venv/bin/python" -m pip install -r "${REPO_DIR}/raspberry_pi/requirements.txt"
 
-sudo chown -R "${SERVICE_USER}:${SERVICE_GROUP}" "${REPO_DIR}/raspberry_pi"
+sudo mkdir -p "${REPO_DIR}/raspberry_pi/data"
+sudo chown -R root:root "${REPO_DIR}/raspberry_pi"
+sudo chown -R "${SERVICE_USER}:${SERVICE_GROUP}" "${REPO_DIR}/raspberry_pi/data"
 sudo cp "${REPO_DIR}/deploy/systemd/room-monitor-collector.service" "${SERVICE_FILE}"
 sudo sed -i "s#User=pi#User=${SERVICE_USER}#g" "${SERVICE_FILE}"
 sudo sed -i "s#Group=pi#Group=${SERVICE_GROUP}#g" "${SERVICE_FILE}"

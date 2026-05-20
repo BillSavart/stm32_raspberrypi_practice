@@ -2,6 +2,8 @@
 Description=Room Monitor Raspberry Pi collector
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -9,9 +11,14 @@ User=pi
 Group=pi
 WorkingDirectory=/opt/stm32_raspberrypi_practice/raspberry_pi
 EnvironmentFile=/etc/room-monitor/collector.env
-ExecStart=/opt/stm32_raspberrypi_practice/raspberry_pi/.venv/bin/python /opt/stm32_raspberrypi_practice/raspberry_pi/serial_collector.py --port ${SERIAL_PORT} --baud ${SERIAL_BAUD} --db ${LOCAL_DB} --upload-url ${UPLOAD_URL} --upload-every-seconds ${UPLOAD_EVERY_SECONDS} --api-key ${ROOM_MONITOR_API_KEY}
+ExecStart=/opt/stm32_raspberrypi_practice/raspberry_pi/.venv/bin/python /opt/stm32_raspberrypi_practice/raspberry_pi/serial_collector.py --port ${SERIAL_PORT} --baud ${SERIAL_BAUD} --db ${LOCAL_DB} --retention-days ${LOCAL_RETENTION_DAYS} --prune-every-seconds ${LOCAL_PRUNE_EVERY_SECONDS} --upload-url ${UPLOAD_URL} --upload-every-seconds ${UPLOAD_EVERY_SECONDS}
 Restart=always
 RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/stm32_raspberrypi_practice/raspberry_pi/data
 
 [Install]
 WantedBy=multi-user.target

@@ -15,7 +15,9 @@ Release/
 *.sqlite3-journal
 *.sqlite3-wal
 *.sqlite3-shm
+*.sqlite3.gz
 data/
+backups/
 
 .metadata/
 *.launch
@@ -165,6 +167,8 @@ activemq-data/
 
 # Environments
 .env
+.env.*
+!.env.example
 .envrc
 .venv
 env/

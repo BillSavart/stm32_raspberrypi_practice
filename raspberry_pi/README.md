@@ -65,14 +65,20 @@ python3 serial_collector.py \
   --port /dev/serial0 \
   --baud 115200 \
   --db data/room_readings.sqlite3 \
-  --upload-url http://SERVER_IP_OR_DOMAIN:8000/api/readings \
-  --upload-every-seconds 60 \
-  --api-key 'change-this-secret'
+  --upload-url https://SERVER_IP_OR_DOMAIN/api/readings \
+  --upload-every-seconds 60
 ```
 
 `--upload-every-seconds` limits backend traffic. The Pi still writes every
 received reading to local SQLite, but only uploads the latest accepted reading
 when the interval has elapsed.
+
+Set `ROOM_MONITOR_WRITE_API_KEY` in the environment or systemd env file. The
+collector reads it from the environment so the key does not appear in process
+arguments.
+
+Local readings older than `--retention-days` are deleted during periodic prune
+runs. Use `--retention-days 0` to disable local retention cleanup.
 
 ## Development test without hardware
 

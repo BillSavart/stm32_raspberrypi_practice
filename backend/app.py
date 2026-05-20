@@ -1,21 +1,57 @@
 from __future__ import annotations
 
 import os
+import secrets
 import sqlite3
+import time
+from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, Query, status
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response, status
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, Field
 
 
 DATABASE_URL = Path(os.environ.get("ROOM_MONITOR_DB", "data/room_monitor.sqlite3"))
-API_KEY = os.environ.get("ROOM_MONITOR_API_KEY")
+WRITE_API_KEY = os.environ.get("ROOM_MONITOR_WRITE_API_KEY")
+READ_API_KEY = os.environ.get("ROOM_MONITOR_READ_API_KEY")
 API_KEY_HEADER = APIKeyHeader(name="X-API-Key", auto_error=False)
+MAX_BODY_BYTES = int(os.environ.get("ROOM_MONITOR_MAX_BODY_BYTES", "4096"))
+RATE_LIMIT_REQUESTS = int(os.environ.get("ROOM_MONITOR_RATE_LIMIT_REQUESTS", "30"))
+RATE_LIMIT_WINDOW_SECONDS = int(os.environ.get("ROOM_MONITOR_RATE_LIMIT_WINDOW_SECONDS", "60"))
+RETENTION_DAYS = int(os.environ.get("ROOM_MONITOR_RETENTION_DAYS", "30"))
+_REQUEST_LOG: dict[str, deque[float]] = defaultdict(deque)
 
 app = FastAPI(title="Room Monitor API", version="0.1.0")
+
+
+@app.middleware("http")
+async def request_guard(request: Request, call_next):
+    if request.url.path.startswith("/api/"):
+        content_length = request.headers.get("content-length")
+        if content_length is not None:
+            try:
+                body_bytes = int(content_length)
+            except ValueError:
+                return Response("Invalid Content-Length", status_code=status.HTTP_400_BAD_REQUEST)
+
+            if body_bytes > MAX_BODY_BYTES:
+                return Response("Request body too large", status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE)
+
+        client_host = request.client.host if request.client else "unknown"
+        now = time.monotonic()
+        request_times = _REQUEST_LOG[client_host]
+        while request_times and now - request_times[0] > RATE_LIMIT_WINDOW_SECONDS:
+            request_times.popleft()
+
+        if len(request_times) >= RATE_LIMIT_REQUESTS:
+            return Response("Rate limit exceeded", status_code=status.HTTP_429_TOO_MANY_REQUESTS)
+
+        request_times.append(now)
+
+    return await call_next(request)
 
 
 class ReadingIn(BaseModel):
@@ -79,9 +115,29 @@ def get_db():
         conn.close()
 
 
-def require_api_key(api_key: Annotated[str | None, Depends(API_KEY_HEADER)]) -> None:
-    if API_KEY and api_key != API_KEY:
+def require_configured_key(expected_key: str | None, key_name: str, api_key: str | None) -> None:
+    if not expected_key:
+        raise HTTPException(status_code=503, detail=f"{key_name} is not configured")
+
+    if api_key is None or not secrets.compare_digest(api_key, expected_key):
         raise HTTPException(status_code=401, detail="Invalid or missing API key")
+
+
+def require_write_key(api_key: Annotated[str | None, Depends(API_KEY_HEADER)]) -> None:
+    require_configured_key(WRITE_API_KEY, "ROOM_MONITOR_WRITE_API_KEY", api_key)
+
+
+def require_read_key(api_key: Annotated[str | None, Depends(API_KEY_HEADER)]) -> None:
+    require_configured_key(READ_API_KEY, "ROOM_MONITOR_READ_API_KEY", api_key)
+
+
+def prune_old_readings(db: sqlite3.Connection) -> None:
+    if RETENTION_DAYS <= 0:
+        return
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=RETENTION_DAYS)
+    cutoff_iso = cutoff.isoformat(timespec="seconds").replace("+00:00", "Z")
+    db.execute("DELETE FROM readings WHERE measured_at < ?", (cutoff_iso,))
 
 
 def row_to_reading(row: sqlite3.Row) -> ReadingOut:
@@ -109,7 +165,7 @@ def health() -> dict[str, str]:
     "/api/readings",
     response_model=ReadingOut,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_api_key)],
+    dependencies=[Depends(require_write_key)],
 )
 def create_reading(reading: ReadingIn, db: Annotated[sqlite3.Connection, Depends(get_db)]) -> ReadingOut:
     measured_at = reading.measured_at or utc_now_iso()
@@ -118,6 +174,7 @@ def create_reading(reading: ReadingIn, db: Annotated[sqlite3.Connection, Depends
     except ValueError as exc:
         raise HTTPException(status_code=422, detail="measured_at must be an ISO-8601 timestamp") from exc
 
+    prune_old_readings(db)
     cursor = db.execute(
         """
         INSERT INTO readings (
@@ -145,7 +202,7 @@ def create_reading(reading: ReadingIn, db: Annotated[sqlite3.Connection, Depends
     return row_to_reading(row)
 
 
-@app.get("/api/readings/latest", response_model=ReadingOut)
+@app.get("/api/readings/latest", response_model=ReadingOut, dependencies=[Depends(require_read_key)])
 def latest_reading(db: Annotated[sqlite3.Connection, Depends(get_db)]) -> ReadingOut:
     row = db.execute("SELECT * FROM readings ORDER BY measured_at DESC, id DESC LIMIT 1").fetchone()
     if row is None:
@@ -153,7 +210,7 @@ def latest_reading(db: Annotated[sqlite3.Connection, Depends(get_db)]) -> Readin
     return row_to_reading(row)
 
 
-@app.get("/api/readings", response_model=list[ReadingOut])
+@app.get("/api/readings", response_model=list[ReadingOut], dependencies=[Depends(require_read_key)])
 def list_readings(
     db: Annotated[sqlite3.Connection, Depends(get_db)],
     hours: Annotated[int, Query(ge=1, le=168)] = 24,

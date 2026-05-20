@@ -1,0 +1,16 @@
+[Unit]
+Description=Back up Room Monitor SQLite database
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=oneshot
+User=roommonitor
+Group=roommonitor
+EnvironmentFile=/etc/room-monitor/backend.env
+ExecStart=/opt/stm32_raspberrypi_practice/deploy/backup_backend_db.sh
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/stm32_raspberrypi_practice/backend/backups

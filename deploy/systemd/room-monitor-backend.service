@@ -2,6 +2,8 @@
 Description=Room Monitor FastAPI backend
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -9,9 +11,14 @@ User=roommonitor
 Group=roommonitor
 WorkingDirectory=/opt/stm32_raspberrypi_practice/backend
 EnvironmentFile=/etc/room-monitor/backend.env
-ExecStart=/opt/stm32_raspberrypi_practice/backend/.venv/bin/uvicorn app:app --host 0.0.0.0 --port 8000
+ExecStart=/opt/stm32_raspberrypi_practice/backend/.venv/bin/uvicorn app:app --host 127.0.0.1 --port 8000
 Restart=always
 RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/stm32_raspberrypi_practice/backend/data
 
 [Install]
 WantedBy=multi-user.target

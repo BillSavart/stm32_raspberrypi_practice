@@ -5,13 +5,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sqlite3
 import sys
 import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable, TextIO
 
@@ -63,6 +64,16 @@ def connect_db(db_path: Path) -> sqlite3.Connection:
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_readings_measured_at ON readings(measured_at)")
     return conn
+
+
+def prune_old_readings(conn: sqlite3.Connection, retention_days: int) -> None:
+    if retention_days <= 0:
+        return
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+    cutoff_iso = cutoff.isoformat(timespec="seconds").replace("+00:00", "Z")
+    conn.execute("DELETE FROM readings WHERE measured_at < ?", (cutoff_iso,))
+    conn.commit()
 
 
 def parse_reading(line: str) -> Reading | None:
@@ -126,9 +137,10 @@ def reading_to_upload_payload(reading: Reading) -> dict[str, int | str]:
     }
 
 
-def upload_reading(upload_url: str, reading: Reading, timeout: float, api_key: str | None) -> bool:
+def upload_reading(upload_url: str, reading: Reading, timeout: float) -> bool:
     body = json.dumps(reading_to_upload_payload(reading)).encode("utf-8")
     headers = {"Content-Type": "application/json"}
+    api_key = os.environ.get("ROOM_MONITOR_WRITE_API_KEY")
     if api_key:
         headers["X-API-Key"] = api_key
 
@@ -187,6 +199,7 @@ def run(args: argparse.Namespace) -> int:
     conn = connect_db(args.db)
     source = iter_stdin_lines(sys.stdin) if args.stdin else iter_serial_lines(args.port, args.baud, args.timeout)
     last_upload_monotonic: float | None = None
+    last_prune_monotonic = 0.0
 
     print(f"Collecting STM32 readings into {args.db}", flush=True)
     if not args.stdin:
@@ -203,11 +216,15 @@ def run(args: argparse.Namespace) -> int:
             continue
 
         insert_reading(conn, reading)
+        now_monotonic = time.monotonic()
+        if now_monotonic - last_prune_monotonic >= args.prune_every_seconds:
+            prune_old_readings(conn, args.retention_days)
+            last_prune_monotonic = now_monotonic
+
         if args.upload_url:
-            now_monotonic = time.monotonic()
             if last_upload_monotonic is None or now_monotonic - last_upload_monotonic >= args.upload_every_seconds:
                 last_upload_monotonic = now_monotonic
-                upload_reading(args.upload_url, reading, args.upload_timeout, args.api_key)
+                upload_reading(args.upload_url, reading, args.upload_timeout)
             elif args.verbose:
                 print("upload skipped: waiting for next upload interval", file=sys.stderr, flush=True)
         print_reading(reading)
@@ -221,6 +238,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--baud", type=int, default=115200, help="UART baud rate.")
     parser.add_argument("--timeout", type=float, default=1.0, help="Serial read timeout in seconds.")
     parser.add_argument("--db", type=Path, default=Path("room_readings.sqlite3"), help="SQLite database path.")
+    parser.add_argument("--retention-days", type=int, default=30, help="Delete local readings older than this many days.")
+    parser.add_argument(
+        "--prune-every-seconds",
+        type=float,
+        default=3600.0,
+        help="Minimum interval between local retention cleanup runs.",
+    )
     parser.add_argument("--upload-url", help="Optional backend POST /api/readings URL.")
     parser.add_argument("--upload-timeout", type=float, default=3.0, help="Backend upload timeout in seconds.")
     parser.add_argument(
@@ -229,7 +253,6 @@ def build_parser() -> argparse.ArgumentParser:
         default=60.0,
         help="Minimum interval between backend uploads. Local SQLite still stores every reading.",
     )
-    parser.add_argument("--api-key", help="Optional backend API key sent as X-API-Key.")
     parser.add_argument("--stdin", action="store_true", help="Read JSON lines from stdin instead of a serial port.")
     parser.add_argument("--verbose", action="store_true", help="Print ignored non-reading lines to stderr.")
     return parser
