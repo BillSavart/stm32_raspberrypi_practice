@@ -66,8 +66,13 @@ python3 serial_collector.py \
   --baud 115200 \
   --db data/room_readings.sqlite3 \
   --upload-url http://SERVER_IP_OR_DOMAIN:8000/api/readings \
+  --upload-every-seconds 60 \
   --api-key 'change-this-secret'
 ```
+
+`--upload-every-seconds` limits backend traffic. The Pi still writes every
+received reading to local SQLite, but only uploads the latest accepted reading
+when the interval has elapsed.
 
 ## Development test without hardware
 

@@ -98,5 +98,6 @@ python3 serial_collector.py \
   --port /dev/serial0 \
   --baud 115200 \
   --db data/room_readings.sqlite3 \
-  --upload-url http://SERVER_IP_OR_DOMAIN:8000/api/readings
+  --upload-url http://SERVER_IP_OR_DOMAIN:8000/api/readings \
+  --upload-every-seconds 60
 ```

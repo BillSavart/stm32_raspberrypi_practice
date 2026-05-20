@@ -7,6 +7,7 @@ import argparse
 import json
 import sqlite3
 import sys
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -185,12 +186,14 @@ def print_reading(reading: Reading) -> None:
 def run(args: argparse.Namespace) -> int:
     conn = connect_db(args.db)
     source = iter_stdin_lines(sys.stdin) if args.stdin else iter_serial_lines(args.port, args.baud, args.timeout)
+    last_upload_monotonic: float | None = None
 
     print(f"Collecting STM32 readings into {args.db}", flush=True)
     if not args.stdin:
         print(f"Serial source: {args.port} @ {args.baud}", flush=True)
     if args.upload_url:
         print(f"Upload target: {args.upload_url}", flush=True)
+        print(f"Upload interval: every {args.upload_every_seconds}s", flush=True)
 
     for line in source:
         reading = parse_reading(line)
@@ -201,7 +204,12 @@ def run(args: argparse.Namespace) -> int:
 
         insert_reading(conn, reading)
         if args.upload_url:
-            upload_reading(args.upload_url, reading, args.upload_timeout, args.api_key)
+            now_monotonic = time.monotonic()
+            if last_upload_monotonic is None or now_monotonic - last_upload_monotonic >= args.upload_every_seconds:
+                last_upload_monotonic = now_monotonic
+                upload_reading(args.upload_url, reading, args.upload_timeout, args.api_key)
+            elif args.verbose:
+                print("upload skipped: waiting for next upload interval", file=sys.stderr, flush=True)
         print_reading(reading)
 
     return 0
@@ -215,6 +223,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--db", type=Path, default=Path("room_readings.sqlite3"), help="SQLite database path.")
     parser.add_argument("--upload-url", help="Optional backend POST /api/readings URL.")
     parser.add_argument("--upload-timeout", type=float, default=3.0, help="Backend upload timeout in seconds.")
+    parser.add_argument(
+        "--upload-every-seconds",
+        type=float,
+        default=60.0,
+        help="Minimum interval between backend uploads. Local SQLite still stores every reading.",
+    )
     parser.add_argument("--api-key", help="Optional backend API key sent as X-API-Key.")
     parser.add_argument("--stdin", action="store_true", help="Read JSON lines from stdin instead of a serial port.")
     parser.add_argument("--verbose", action="store_true", help="Print ignored non-reading lines to stderr.")
