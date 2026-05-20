@@ -40,6 +40,10 @@ sudo nano /etc/room-monitor/firebase_collector.env
 sudo systemctl restart room-monitor-firebase-collector.service
 ```
 
+If the repo is under your home directory, such as
+`/home/bill/Desktop/stm32_raspberrypi_practice`, pass that path with `REPO_DIR`.
+The systemd service is allowed to read that path so Desktop-based checkouts work.
+
 Set these values:
 
 ```text
