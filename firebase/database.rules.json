@@ -1,0 +1,19 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "latest": {
+      ".read": true,
+      ".write": "auth != null && auth.uid === 'REPLACE_WITH_FIREBASE_DEVICE_UID'",
+      ".validate": "newData.hasChildren(['measured_at', 'temperature_c_x100', 'humidity_rh_x100', 'pressure_pa', 'gas_ohm', 'gas_valid', 'heat_stable']) && newData.child('temperature_c_x100').isNumber() && newData.child('humidity_rh_x100').isNumber() && newData.child('pressure_pa').isNumber() && newData.child('gas_ohm').isNumber() && newData.child('gas_valid').isNumber() && newData.child('heat_stable').isNumber()"
+    },
+    "readings": {
+      ".read": true,
+      ".indexOn": ["measured_at"],
+      "$reading_id": {
+        ".write": "auth != null && auth.uid === 'REPLACE_WITH_FIREBASE_DEVICE_UID'",
+        ".validate": "newData.hasChildren(['measured_at', 'temperature_c_x100', 'humidity_rh_x100', 'pressure_pa', 'gas_ohm', 'gas_valid', 'heat_stable']) && newData.child('temperature_c_x100').isNumber() && newData.child('humidity_rh_x100').isNumber() && newData.child('pressure_pa').isNumber() && newData.child('gas_ohm').isNumber() && newData.child('gas_valid').isNumber() && newData.child('heat_stable').isNumber()"
+      }
+    }
+  }
+}

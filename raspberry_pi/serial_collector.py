@@ -5,12 +5,9 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sqlite3
 import sys
 import time
-import urllib.error
-import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -137,28 +134,6 @@ def reading_to_upload_payload(reading: Reading) -> dict[str, int | str]:
     }
 
 
-def upload_reading(upload_url: str, reading: Reading, timeout: float) -> bool:
-    body = json.dumps(reading_to_upload_payload(reading)).encode("utf-8")
-    headers = {"Content-Type": "application/json"}
-    api_key = os.environ.get("ROOM_MONITOR_WRITE_API_KEY")
-    if api_key:
-        headers["X-API-Key"] = api_key
-
-    request = urllib.request.Request(
-        upload_url,
-        data=body,
-        headers=headers,
-        method="POST",
-    )
-
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            return 200 <= response.status < 300
-    except (TimeoutError, urllib.error.URLError, urllib.error.HTTPError) as exc:
-        print(f"upload failed: {exc}", file=sys.stderr, flush=True)
-        return False
-
-
 def iter_stdin_lines(stdin: TextIO) -> Iterable[str]:
     for line in stdin:
         yield line
@@ -198,15 +173,11 @@ def print_reading(reading: Reading) -> None:
 def run(args: argparse.Namespace) -> int:
     conn = connect_db(args.db)
     source = iter_stdin_lines(sys.stdin) if args.stdin else iter_serial_lines(args.port, args.baud, args.timeout)
-    last_upload_monotonic: float | None = None
     last_prune_monotonic = 0.0
 
     print(f"Collecting STM32 readings into {args.db}", flush=True)
     if not args.stdin:
         print(f"Serial source: {args.port} @ {args.baud}", flush=True)
-    if args.upload_url:
-        print(f"Upload target: {args.upload_url}", flush=True)
-        print(f"Upload interval: every {args.upload_every_seconds}s", flush=True)
 
     for line in source:
         reading = parse_reading(line)
@@ -221,12 +192,6 @@ def run(args: argparse.Namespace) -> int:
             prune_old_readings(conn, args.retention_days)
             last_prune_monotonic = now_monotonic
 
-        if args.upload_url:
-            if last_upload_monotonic is None or now_monotonic - last_upload_monotonic >= args.upload_every_seconds:
-                last_upload_monotonic = now_monotonic
-                upload_reading(args.upload_url, reading, args.upload_timeout)
-            elif args.verbose:
-                print("upload skipped: waiting for next upload interval", file=sys.stderr, flush=True)
         print_reading(reading)
 
     return 0
@@ -244,14 +209,6 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=3600.0,
         help="Minimum interval between local retention cleanup runs.",
-    )
-    parser.add_argument("--upload-url", help="Optional backend POST /api/readings URL.")
-    parser.add_argument("--upload-timeout", type=float, default=3.0, help="Backend upload timeout in seconds.")
-    parser.add_argument(
-        "--upload-every-seconds",
-        type=float,
-        default=60.0,
-        help="Minimum interval between backend uploads. Local SQLite still stores every reading.",
     )
     parser.add_argument("--stdin", action="store_true", help="Read JSON lines from stdin instead of a serial port.")
     parser.add_argument("--verbose", action="store_true", help="Print ignored non-reading lines to stderr.")

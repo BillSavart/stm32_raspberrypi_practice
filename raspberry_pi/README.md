@@ -58,27 +58,52 @@ similar to `/dev/ttyUSB0`:
 python3 serial_collector.py --port /dev/ttyUSB0 --baud 115200 --db data/room_readings.sqlite3
 ```
 
-To upload each reading to the backend while still keeping the local SQLite copy:
+Local readings older than `--retention-days` are deleted during periodic prune
+runs. Use `--retention-days 0` to disable local retention cleanup.
+
+## Firebase upload
+
+Create a dedicated Firebase Auth user for the Raspberry Pi, then store only
+that device account on the Pi.
+
+Required environment variables:
 
 ```bash
-python3 serial_collector.py \
-  --port /dev/serial0 \
+export FIREBASE_API_KEY=your-firebase-web-api-key
+export FIREBASE_DEVICE_EMAIL=room-device@example.com
+export FIREBASE_DEVICE_PASSWORD=your-device-password
+```
+
+Run manually:
+
+```bash
+python3 firebase_uploader.py \
+  --port /dev/ttyACM0 \
   --baud 115200 \
   --db data/room_readings.sqlite3 \
-  --upload-url https://SERVER_IP_OR_DOMAIN/api/readings \
+  --firebase-database-url https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com \
   --upload-every-seconds 60
 ```
 
-`--upload-every-seconds` limits backend traffic. The Pi still writes every
-received reading to local SQLite, but only uploads the latest accepted reading
-when the interval has elapsed.
+Hardware-free smoke test:
 
-Set `ROOM_MONITOR_WRITE_API_KEY` in the environment or systemd env file. The
-collector reads it from the environment so the key does not appear in process
-arguments.
+```bash
+printf '%s\n' '{"temperature_c_x100":2642,"humidity_rh_x100":6130,"pressure_pa":100820,"gas_ohm":82345,"gas_valid":1,"heat_stable":1}' \
+  | python3 firebase_uploader.py \
+      --stdin \
+      --db /tmp/room_readings.sqlite3 \
+      --firebase-database-url https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com \
+      --upload-every-seconds 1
+```
 
-Local readings older than `--retention-days` are deleted during periodic prune
-runs. Use `--retention-days 0` to disable local retention cleanup.
+For systemd deployment on the Pi:
+
+```bash
+sudo bash deploy/install_firebase_collector_service.sh
+sudo nano /etc/room-monitor/firebase_collector.env
+sudo systemctl restart room-monitor-firebase-collector.service
+journalctl -u room-monitor-firebase-collector.service -f
+```
 
 ## Development test without hardware
 

@@ -41,8 +41,8 @@ Field meaning:
 - `heat_stable`: `1` means the gas heater reached a stable state.
 
 This JSON-line format is intentionally Raspberry Pi friendly: the Pi can read
-each UART line, parse it as JSON, add a timestamp, and forward it to the GCP
-backend later.
+each UART line, parse it as JSON, add a timestamp, and upload throttled samples
+to Firebase later.
 
 ## Raspberry Pi collector
 
@@ -71,41 +71,36 @@ python3 serial_collector.py --port /dev/serial0 --baud 115200 --db data/room_rea
 
 Detailed Pi wiring and setup notes are in `raspberry_pi/README.md`.
 
-## Backend API
+## Firebase + GitHub Pages path
 
-The backend lives in `backend/`. It exposes:
+Use Firebase Realtime Database as the data store and GitHub Pages as the
+phone-friendly dashboard.
 
-- `POST /api/readings`
-- `GET /api/readings/latest`
-- `GET /api/readings?hours=24`
-- `GET /health`
-
-Run locally:
-
-```bash
-cd backend
-python3 -m venv .venv
-. .venv/bin/activate
-python3 -m pip install -r requirements.txt
-uvicorn app:app --host 0.0.0.0 --port 8000
+```text
+STM32 -> Raspberry Pi -> Firebase Realtime Database -> GitHub Pages dashboard
 ```
 
-Then run the Pi collector with upload enabled:
+The Firebase path keeps local SQLite storage on the Pi, but uploads only one
+sample per interval:
 
 ```bash
 cd raspberry_pi
-python3 serial_collector.py \
-  --port /dev/serial0 \
+export FIREBASE_API_KEY=your-firebase-web-api-key
+export FIREBASE_DEVICE_EMAIL=room-device@example.com
+export FIREBASE_DEVICE_PASSWORD=your-device-password
+
+python3 firebase_uploader.py \
+  --port /dev/ttyACM0 \
   --baud 115200 \
   --db data/room_readings.sqlite3 \
-  --upload-url https://SERVER_IP_OR_DOMAIN/api/readings \
+  --firebase-database-url https://YOUR_PROJECT_ID-default-rtdb.firebaseio.com \
   --upload-every-seconds 60
 ```
 
-For deployment, use separate write/read API keys:
+The static dashboard lives in `web/`. Edit `web/firebase-config.js` with the
+Firebase web app config, then enable GitHub Pages with GitHub Actions as the
+source. The included workflow publishes `web/`.
 
-- `ROOM_MONITOR_WRITE_API_KEY`: Raspberry Pi uploads
-- `ROOM_MONITOR_READ_API_KEY`: queries and future LINE Bot
-
-Copy `.env.example` to `.env` for local development secrets. `.env` is ignored
-by git; do not commit real API keys.
+Firebase Realtime Database rules are in `firebase/database.rules.json`. Replace
+`REPLACE_WITH_FIREBASE_DEVICE_UID` with the Firebase Auth UID for the dedicated
+device account before publishing the rules.

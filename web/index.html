@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Room Monitor</title>
+    <link rel="stylesheet" href="styles.css">
+    <script defer src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+    <script defer src="https://www.gstatic.com/firebasejs/10.12.5/firebase-database-compat.js"></script>
+    <script defer src="firebase-config.js"></script>
+    <script defer src="app.js"></script>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Room Monitor</p>
+          <h1>Live environment</h1>
+        </div>
+        <div class="statusWrap">
+          <span class="statusDot" aria-hidden="true"></span>
+          <div>
+            <span class="label">Status</span>
+            <strong id="connectionStatus">Connecting</strong>
+          </div>
+        </div>
+      </header>
+
+      <section class="metrics" aria-label="Latest room readings">
+        <article class="metric metricTemp">
+          <span class="label">Temperature</span>
+          <strong id="temperature">--</strong>
+          <span class="unit">C</span>
+        </article>
+        <article class="metric metricHumidity">
+          <span class="label">Humidity</span>
+          <strong id="humidity">--</strong>
+          <span class="unit">%</span>
+        </article>
+        <article class="metric metricPressure">
+          <span class="label">Pressure</span>
+          <strong id="pressure">--</strong>
+          <span class="unit">hPa</span>
+        </article>
+        <article class="metric metricGas">
+          <span class="label">Gas</span>
+          <strong id="gas">--</strong>
+          <span class="unit">ohm</span>
+        </article>
+      </section>
+
+      <section class="details" aria-label="Reading details">
+        <div>
+          <span class="label">Last update</span>
+          <p id="lastUpdate">--</p>
+        </div>
+        <div>
+          <span class="label">Gas status</span>
+          <p id="gasStatus">--</p>
+        </div>
+      </section>
+
+      <section class="trend" aria-label="Recent temperature and humidity trend">
+        <div class="sectionHeader">
+          <h2>Trend</h2>
+          <div class="legend">
+            <span><i class="legendTemp"></i>Temp</span>
+            <span><i class="legendHumidity"></i>Humidity</span>
+          </div>
+        </div>
+        <svg id="trendChart" viewBox="0 0 720 180" role="img" aria-label="Recent temperature and humidity chart">
+          <line x1="0" y1="150" x2="720" y2="150" class="gridLine"></line>
+          <line x1="0" y1="90" x2="720" y2="90" class="gridLine"></line>
+          <line x1="0" y1="30" x2="720" y2="30" class="gridLine"></line>
+          <path id="temperaturePath" class="tempPath" d=""></path>
+          <path id="humidityPath" class="humidityPath" d=""></path>
+          <text id="trendEmpty" x="360" y="96" text-anchor="middle">Waiting for trend data</text>
+        </svg>
+      </section>
+
+      <section class="history" aria-label="Recent readings">
+        <div class="sectionHeader">
+          <h2>Recent readings</h2>
+          <span id="historyCount">0 rows</span>
+        </div>
+        <div class="tableWrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Temp</th>
+                <th>Humidity</th>
+                <th>Pressure</th>
+                <th>Gas</th>
+              </tr>
+            </thead>
+            <tbody id="historyBody">
+              <tr>
+                <td colspan="5">Waiting for readings.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
