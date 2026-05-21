@@ -162,7 +162,7 @@ h2 {
 
 #pressure,
 #gas {
-  font-size: clamp(1.6rem, 3.2vw, 2.8rem);
+  font-size: clamp(1.8rem, 3.4vw, 3.05rem);
 }
 
 .unit {
@@ -329,9 +329,12 @@ td {
     width: 100%;
   }
 
-  .metrics,
   .details {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .metrics {
+    grid-template-columns: 1fr;
   }
 
   .metric {
@@ -345,7 +348,7 @@ td {
 
   #pressure,
   #gas {
-    font-size: clamp(1.5rem, 7.6vw, 2.3rem);
+    font-size: clamp(2.1rem, 9.4vw, 3rem);
   }
 
   .trend,
