@@ -178,7 +178,7 @@ function boot() {
     }
   );
 
-  database.ref("readings").orderByChild("measured_at").limitToLast(24).on(
+  database.ref("readings").orderByChild("measured_at").limitToLast(20).on(
     "value",
     updateHistory,
     (error) => {
