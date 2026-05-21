@@ -70,7 +70,14 @@ FIREBASE_API_KEY=your-firebase-web-api-key
 FIREBASE_DEVICE_EMAIL=room-device@example.com
 FIREBASE_DEVICE_PASSWORD=your-device-password
 FIREBASE_UPLOAD_EVERY_SECONDS=60
+FIREBASE_RETENTION_DAYS=30
+FIREBASE_PRUNE_EVERY_SECONDS=86400
+FIREBASE_PRUNE_BATCH_SIZE=200
 ```
+
+Firebase retention deletes old `/readings` rows from Realtime Database. `latest`
+is kept so the dashboard always has the newest reading. At one upload per
+minute, 30 days is about 43,200 history rows.
 
 Check logs:
 

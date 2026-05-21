@@ -12,6 +12,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -69,23 +70,33 @@ def firebase_sign_in(api_key: str, email: str, password: str, timeout: float) ->
     )
 
 
-def firebase_database_url(database_url: str, path: str, id_token: str) -> str:
+def firebase_database_url(
+    database_url: str,
+    path: str,
+    id_token: str,
+    extra_query: dict[str, str | int | bool] | None = None,
+) -> str:
     base = database_url.rstrip("/")
     clean_path = path.strip("/")
-    query = urllib.parse.urlencode({"auth": id_token})
+    query_values: dict[str, str | int | bool] = {"auth": id_token}
+    if extra_query:
+        query_values.update(extra_query)
+    query = urllib.parse.urlencode(query_values)
     return f"{base}/{clean_path}.json?{query}"
 
 
-def firebase_request(method: str, url: str, payload: dict[str, Any], timeout: float) -> None:
+def firebase_request(method: str, url: str, payload: dict[str, Any] | None, timeout: float) -> bytes:
+    data = None if payload is None else json.dumps(payload).encode("utf-8")
     request = urllib.request.Request(
         url,
-        data=json.dumps(payload).encode("utf-8"),
+        data=data,
         headers={"Content-Type": "application/json"},
         method=method,
     )
     with urllib.request.urlopen(request, timeout=timeout) as response:
         if not 200 <= response.status < 300:
             raise RuntimeError(f"Firebase returned HTTP {response.status}")
+        return response.read()
 
 
 def firebase_payload(reading: Reading) -> dict[str, Any]:
@@ -111,6 +122,40 @@ def upload_to_firebase(args: argparse.Namespace, session: FirebaseSession, readi
         return False
 
 
+def firebase_cutoff_key(retention_days: int) -> str:
+    cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+    return cutoff.isoformat(timespec="seconds").replace("+00:00", "Z").replace(":", "-")
+
+
+def prune_firebase_readings(args: argparse.Namespace, session: FirebaseSession) -> None:
+    if args.firebase_retention_days <= 0:
+        return
+
+    cutoff_key = firebase_cutoff_key(args.firebase_retention_days)
+    query_url = firebase_database_url(
+        args.firebase_database_url,
+        "readings",
+        session.id_token,
+        {
+            "orderBy": json.dumps("$key"),
+            "endAt": json.dumps(cutoff_key),
+            "limitToFirst": args.firebase_prune_batch_size,
+        },
+    )
+    response_body = firebase_request("GET", query_url, None, args.upload_timeout)
+    old_readings = json.loads(response_body.decode("utf-8") or "null")
+    if not isinstance(old_readings, dict) or not old_readings:
+        return
+
+    delete_count = 0
+    for reading_key in old_readings:
+        delete_url = firebase_database_url(args.firebase_database_url, f"readings/{reading_key}", session.id_token)
+        firebase_request("DELETE", delete_url, None, args.upload_timeout)
+        delete_count += 1
+
+    print(f"firebase prune deleted {delete_count} old readings", flush=True)
+
+
 def require_env(name: str) -> str:
     value = os.environ.get(name)
     if not value:
@@ -128,12 +173,15 @@ def run(args: argparse.Namespace) -> int:
     session = firebase_sign_in(api_key, email, password, args.upload_timeout)
     last_upload_monotonic: float | None = None
     last_prune_monotonic = 0.0
+    last_firebase_prune_monotonic = 0.0
 
     print(f"Collecting STM32 readings into {args.db}", flush=True)
     if not args.stdin:
         print(f"Serial source: {args.port} @ {args.baud}", flush=True)
     print(f"Firebase database: {args.firebase_database_url}", flush=True)
     print(f"Firebase upload interval: every {args.upload_every_seconds}s", flush=True)
+    if args.firebase_retention_days > 0:
+        print(f"Firebase retention: {args.firebase_retention_days} days", flush=True)
 
     for line in source:
         reading = parse_reading(line)
@@ -153,6 +201,12 @@ def run(args: argparse.Namespace) -> int:
                 session = firebase_sign_in(api_key, email, password, args.upload_timeout)
             last_upload_monotonic = now_monotonic
             upload_to_firebase(args, session, reading)
+            if now_monotonic - last_firebase_prune_monotonic >= args.firebase_prune_every_seconds:
+                try:
+                    prune_firebase_readings(args, session)
+                except (TimeoutError, urllib.error.URLError, urllib.error.HTTPError, RuntimeError, json.JSONDecodeError) as exc:
+                    print(f"firebase prune failed: {exc}", file=sys.stderr, flush=True)
+                last_firebase_prune_monotonic = now_monotonic
         elif args.verbose:
             print("firebase upload skipped: waiting for next upload interval", file=sys.stderr, flush=True)
 
@@ -184,6 +238,24 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=60.0,
         help="Minimum interval between Firebase uploads. Local SQLite still stores every reading.",
+    )
+    parser.add_argument(
+        "--firebase-retention-days",
+        type=int,
+        default=30,
+        help="Delete Firebase readings older than this many days. Use 0 to disable.",
+    )
+    parser.add_argument(
+        "--firebase-prune-every-seconds",
+        type=float,
+        default=86400.0,
+        help="Minimum interval between Firebase retention cleanup runs.",
+    )
+    parser.add_argument(
+        "--firebase-prune-batch-size",
+        type=int,
+        default=200,
+        help="Maximum old Firebase readings to delete per cleanup run.",
     )
     parser.add_argument("--stdin", action="store_true", help="Read JSON lines from stdin instead of a serial port.")
     parser.add_argument("--verbose", action="store_true", help="Print ignored non-reading lines to stderr.")

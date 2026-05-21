@@ -11,6 +11,16 @@ function formatNumber(value, digits = 2) {
   });
 }
 
+function formatCompact(value, digits = 1) {
+  if (typeof value !== "number" || Number.isNaN(value)) {
+    return "--";
+  }
+  return new Intl.NumberFormat(undefined, {
+    notation: "compact",
+    maximumFractionDigits: digits
+  }).format(value);
+}
+
 function readingValues(reading) {
   return {
     temperature: reading.temperature_c ?? reading.temperature_c_x100 / 100,
@@ -43,10 +53,10 @@ function updateLatest(reading) {
   }
 
   const values = readingValues(reading);
-  document.getElementById("temperature").textContent = formatNumber(values.temperature);
-  document.getElementById("humidity").textContent = formatNumber(values.humidity);
-  document.getElementById("pressure").textContent = formatNumber(values.pressure);
-  document.getElementById("gas").textContent = values.gas?.toLocaleString() ?? "--";
+  document.getElementById("temperature").textContent = formatNumber(values.temperature, 1);
+  document.getElementById("humidity").textContent = formatNumber(values.humidity, 1);
+  document.getElementById("pressure").textContent = formatNumber(values.pressure, 1);
+  document.getElementById("gas").textContent = formatCompact(values.gas, 1);
   document.getElementById("lastUpdate").textContent = formatTime(reading.measured_at);
   document.getElementById("gasStatus").textContent =
     `valid=${reading.gas_valid ?? "--"}, heat_stable=${reading.heat_stable ?? "--"}`;
@@ -87,7 +97,7 @@ function historyRow(reading) {
     ["Time", formatTime(reading.measured_at)],
     ["Temp", `${formatNumber(values.temperature)} C`],
     ["Humidity", `${formatNumber(values.humidity)}%`],
-    ["Pressure", `${formatNumber(values.pressure)} hPa`],
+    ["Pressure", `${formatNumber(values.pressure, 1)} hPa`],
     ["Gas", values.gas?.toLocaleString() ?? "--"]
   ];
   cells.forEach(([label, value]) => {
