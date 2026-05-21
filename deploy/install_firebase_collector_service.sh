@@ -7,6 +7,8 @@ SERVICE_GROUP="${SERVICE_GROUP:-pi}"
 ENV_DIR="/etc/room-monitor"
 ENV_FILE="${ENV_DIR}/firebase_collector.env"
 SERVICE_FILE="/etc/systemd/system/room-monitor-firebase-collector.service"
+DEFAULT_PYTHON_BIN="${REPO_DIR}/raspberry_pi/.venv/bin/python"
+PYTHON_BIN="${PYTHON_BIN:-${DEFAULT_PYTHON_BIN}}"
 
 if [[ ! -d "${REPO_DIR}/raspberry_pi" ]]; then
   echo "Collector directory not found: ${REPO_DIR}/raspberry_pi" >&2
@@ -27,9 +29,17 @@ if [[ ! -f "${ENV_FILE}" ]]; then
   echo "Created ${ENV_FILE}. Edit Firebase settings before starting long-term."
 fi
 
-python3 -m venv "${REPO_DIR}/raspberry_pi/.venv"
-"${REPO_DIR}/raspberry_pi/.venv/bin/python" -m pip install --upgrade pip
-"${REPO_DIR}/raspberry_pi/.venv/bin/python" -m pip install -r "${REPO_DIR}/raspberry_pi/requirements.txt"
+if [[ "${PYTHON_BIN}" == "${DEFAULT_PYTHON_BIN}" ]]; then
+  python3 -m venv "${REPO_DIR}/raspberry_pi/.venv"
+  "${PYTHON_BIN}" -m pip install --upgrade pip
+  "${PYTHON_BIN}" -m pip install -r "${REPO_DIR}/raspberry_pi/requirements.txt"
+else
+  if [[ ! -x "${PYTHON_BIN}" ]]; then
+    echo "PYTHON_BIN is not executable: ${PYTHON_BIN}" >&2
+    exit 1
+  fi
+  sudo -u "${SERVICE_USER}" "${PYTHON_BIN}" -m pip install -r "${REPO_DIR}/raspberry_pi/requirements.txt"
+fi
 
 sudo mkdir -p "${REPO_DIR}/raspberry_pi/data"
 sudo chown -R root:root "${REPO_DIR}/raspberry_pi"
@@ -37,6 +47,7 @@ sudo chown -R "${SERVICE_USER}:${SERVICE_GROUP}" "${REPO_DIR}/raspberry_pi/data"
 sudo cp "${REPO_DIR}/deploy/systemd/room-monitor-firebase-collector.service" "${SERVICE_FILE}"
 sudo sed -i "s#User=pi#User=${SERVICE_USER}#g" "${SERVICE_FILE}"
 sudo sed -i "s#Group=pi#Group=${SERVICE_GROUP}#g" "${SERVICE_FILE}"
+sudo sed -i "s#/usr/bin/python3#${PYTHON_BIN}#g" "${SERVICE_FILE}"
 sudo sed -i "s#/opt/stm32_raspberrypi_practice#${REPO_DIR}#g" "${SERVICE_FILE}"
 
 sudo systemctl daemon-reload

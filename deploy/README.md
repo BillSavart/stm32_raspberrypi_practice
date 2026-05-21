@@ -44,6 +44,24 @@ If the repo is under your home directory, such as
 `/home/bill/Desktop/stm32_raspberrypi_practice`, pass that path with `REPO_DIR`.
 The systemd service is allowed to read that path so Desktop-based checkouts work.
 
+If you want to use Miniforge/conda instead of a project `.venv`, create or
+activate the conda environment first, install with `PYTHON_BIN`, and keep using
+the absolute Python path in systemd:
+
+```bash
+conda create -n room-monitor python=3.11 -y
+conda activate room-monitor
+which python
+
+sudo REPO_DIR=/home/bill/Desktop/stm32_raspberrypi_practice \
+  SERVICE_USER=bill \
+  SERVICE_GROUP=bill \
+  PYTHON_BIN=/home/bill/miniforge3/envs/room-monitor/bin/python \
+  bash deploy/install_firebase_collector_service.sh
+```
+
+Use the path printed by `which python` for `PYTHON_BIN`.
+
 Set these values:
 
 ```text
