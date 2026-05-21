@@ -15,6 +15,12 @@ function formatCompact(value, digits = 1) {
   if (typeof value !== "number" || Number.isNaN(value)) {
     return "--";
   }
+  if (Math.abs(value) >= 1000000) {
+    return `${formatNumber(value / 1000000, digits)}M`;
+  }
+  if (Math.abs(value) >= 1000) {
+    return `${formatNumber(value / 1000, digits)}K`;
+  }
   return new Intl.NumberFormat(undefined, {
     notation: "compact",
     maximumFractionDigits: digits
@@ -55,8 +61,8 @@ function updateLatest(reading) {
   const values = readingValues(reading);
   document.getElementById("temperature").textContent = formatNumber(values.temperature, 1);
   document.getElementById("humidity").textContent = formatNumber(values.humidity, 1);
-  document.getElementById("pressure").textContent = formatNumber(values.pressure, 1);
-  document.getElementById("gas").textContent = formatCompact(values.gas, 1);
+  document.getElementById("pressure").textContent = formatNumber(values.pressure, 0);
+  document.getElementById("gas").textContent = formatCompact(values.gas, 0);
   document.getElementById("lastUpdate").textContent = formatTime(reading.measured_at);
   document.getElementById("gasStatus").textContent =
     `valid=${reading.gas_valid ?? "--"}, heat_stable=${reading.heat_stable ?? "--"}`;

@@ -153,10 +153,16 @@ h2 {
   margin-top: 22px;
   max-width: 100%;
   overflow-wrap: anywhere;
-  font-size: clamp(2rem, 4.4vw, 3.8rem);
+  white-space: nowrap;
+  font-size: clamp(1.9rem, 4vw, 3.5rem);
   line-height: 0.95;
   letter-spacing: 0;
   font-variant-numeric: tabular-nums;
+}
+
+#pressure,
+#gas {
+  font-size: clamp(1.6rem, 3.2vw, 2.8rem);
 }
 
 .unit {
@@ -334,7 +340,12 @@ td {
   }
 
   .metric strong {
-    font-size: clamp(2rem, 10vw, 3rem);
+    font-size: clamp(1.9rem, 8.8vw, 2.8rem);
+  }
+
+  #pressure,
+  #gas {
+    font-size: clamp(1.5rem, 7.6vw, 2.3rem);
   }
 
   .trend,
