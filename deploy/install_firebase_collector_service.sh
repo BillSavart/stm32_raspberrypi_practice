@@ -42,7 +42,6 @@ else
 fi
 
 sudo mkdir -p "${REPO_DIR}/raspberry_pi/data"
-sudo chown -R root:root "${REPO_DIR}/raspberry_pi"
 sudo chown -R "${SERVICE_USER}:${SERVICE_GROUP}" "${REPO_DIR}/raspberry_pi/data"
 sudo cp "${REPO_DIR}/deploy/systemd/room-monitor-firebase-collector.service" "${SERVICE_FILE}"
 sudo sed -i "s#User=pi#User=${SERVICE_USER}#g" "${SERVICE_FILE}"

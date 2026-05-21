@@ -43,6 +43,8 @@ sudo systemctl restart room-monitor-firebase-collector.service
 If the repo is under your home directory, such as
 `/home/bill/Desktop/stm32_raspberrypi_practice`, pass that path with `REPO_DIR`.
 The systemd service is allowed to read that path so Desktop-based checkouts work.
+Keep the checkout owned by your normal user so `git pull` can update it. Only
+`raspberry_pi/data` needs to be writable by the service user.
 
 If you want to use Miniforge/conda instead of a project `.venv`, create or
 activate the conda environment first, install with `PYTHON_BIN`, and keep using
